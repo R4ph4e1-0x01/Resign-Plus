@@ -4,7 +4,9 @@
 
 ## 介绍
 
-基于对[bit4woo](https://github.com/bit4woo)/**[ReSign](https://github.com/bit4woo/ReSign)**项目的改造，增加更多好用的功能。如自动计算时间戳，增加更多灵活调整明文的手段。
+基于对[bit4woo](https://github.com/bit4woo)/**[ReSign](https://github.com/bit4woo/ReSign)**项目的改造，感谢bit4woo师傅的项目。
+
+新增加更多好用的功能。如自动计算时间戳，增加更多灵活调整明文的手段。
 
 ## 使用方法
 
