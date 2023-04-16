@@ -223,7 +223,7 @@ public class CGUI extends JFrame {
 					sortedMethod = table.getRowSorter().getSortKeys().get(0).getSortOrder();
 					System.out.println(sortedMethod); //ASCENDING   DESCENDING
 				} catch (Exception e1) {
-					sortedColumn = -1; //Ã»ÓĞµã»÷±íÍ·½øĞĞÅÅĞò¡£
+					sortedColumn = -1; //æ²¡æœ‰ç‚¹å‡»è¡¨å¤´è¿›è¡Œæ’åºã€‚
 					sortedMethod = null;
 				}
 //				System.out.println(sortedColumn);
@@ -344,7 +344,7 @@ public class CGUI extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				int[] rowindexs = table.getSelectedRows();
 				for (int i=0; i < rowindexs.length; i++){
-					rowindexs[i] = table.convertRowIndexToModel(rowindexs[i]);//×ª»»ÎªModelµÄË÷Òı£¬·ñÔòÅÅĞòºóË÷Òı²»¶ÔÓ¦¡£
+					rowindexs[i] = table.convertRowIndexToModel(rowindexs[i]);//è½¬æ¢ä¸ºModelçš„ç´¢å¼•ï¼Œå¦åˆ™æ’åºåç´¢å¼•ä¸å¯¹åº”ã€‚
 				}
 				Arrays.sort(rowindexs);
 				
@@ -702,7 +702,7 @@ public class CGUI extends JFrame {
 	
 	public LinkedHashMap<String, String> getPara(IRequestInfo analyzeRequest){
     	List<IParameter> paras = analyzeRequest.getParameters();
-    	LinkedHashMap<String,String> paraMap = getParaFromTable();//´Ó±í¸ñÖĞ»ñÈ¡ÓĞĞòµÄMap£¬Ö»Òª¸üĞÂ¾ÍºÃ
+    	LinkedHashMap<String,String> paraMap = getParaFromTable();//ä»è¡¨æ ¼ä¸­è·å–æœ‰åºçš„Mapï¼Œåªè¦æ›´æ–°å°±å¥½
     	for (IParameter para:paras){
     		if (paraMap.containsKey(para.getName())){
     			paraMap.put(para.getName(), para.getValue());

@@ -1,6 +1,7 @@
 package burp;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -23,7 +24,6 @@ import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.PageAttributes.OriginType;
 
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -34,7 +34,6 @@ import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
-import javax.xml.crypto.Data;
 
 import java.awt.GridLayout;
 
@@ -53,12 +52,14 @@ import java.awt.Desktop;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URLDecoder;
-import java.sql.Date;
 
-import burp.IParameter;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import custom.CMD5;
 import custom.CSHA1;
 
+import static custom.CString2Other.JSONOString2Map;
+import static custom.CString2Other.JSONString2JSONObj;
 
 
 public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContextMenuFactory
@@ -85,7 +86,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 	private final ButtonGroup buttonGroup = new ButtonGroup();
 	private final ButtonGroup buttonGroup1 = new ButtonGroup();
 	private final ButtonGroup buttonGroup2 = new ButtonGroup();
-	public String extenderName = "Resign Plus v1.0 by R4ph4e1";
+	public String extenderName = "Resign Plus v1.02 by R4ph4e1";
 	private JTextField textFieldParaConnector;
 	public JLabel lblOrderMethod;
 	
@@ -137,31 +138,48 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 				byte getTimestampParaType = getTimestampParaType(analyzeRequest);
                 //*******************recalculate sign**************************//
 				if (getHost(analyzeRequest).equals(getHostFromUI()) && getSignParaType !=-1){//检查图形面板上的各种参数，都齐备了才进行。
-	    			byte[] new_Request = messageInfo.getRequest();
+	    			byte[] newRequest = messageInfo.getRequest();
 					Map updatedParaMap = getUpdatedParaBaseOnTable(analyzeRequest);
 	    			String str = combineString(updatedParaMap,getOnlyKeyValueConfig(),getOnlyValueConfig(),getParaConnector(),getParaPrefixer(),getParaSuffixer());
 	    			//stdout.println("Combined String:"+str);
 					String newSign = calcSign(java.net.URLDecoder.decode(str,"UTF-8"));
 		    		//stdout.println("New Sign:"+newSign); //输出到extender的UI窗口，可以让使用者有一些判断
-    				//更新参数Sign
-    				IParameter newPara = helpers.buildParameter(signPara, newSign, getSignParaType); //构造新的参数,如果参数是PARAM_JSON类型，这个方法是不适用的
-    				new_Request = helpers.updateParameter(new_Request, newPara); //构造新的请求包，这里是方法一updateParameter
-					//更新参数TimeStamp
-					if (timestampPara!=null){
-						String newTimeStamp = updatedParaMap.get(timestampPara).toString();
-						IParameter newPara4timestamp = helpers.buildParameter(timestampPara, newTimeStamp, getTimestampParaType);
-						new_Request = helpers.updateParameter(new_Request, newPara4timestamp); //构造新的请求包，这里是方法一updateParameter
+
+					if(analyzeRequest.getContentType()==burp.IRequestInfo.CONTENT_TYPE_JSON){
+
+						//更新参数Sign
+						updatedParaMap.put(signPara,newSign);
+						//得到完整的请求数据
+						String newJsonReq = new String(newRequest,"UTF-8"); //请求整个包
+						/**转换JSON模块START**/
+						List<String> newHeaders = analyzeRequest.getHeaders(); //请求的http头
+						//根据请求数据的起始偏移 在 请求数据中得到请求数据包体（body）
+						String newSignJsonBody = JSON.toJSONString(updatedParaMap);
+						stdout.println("new Sign Json Body:" + newSignJsonBody);
+						byte[] newSignJsonBodyByte = newSignJsonBody.getBytes("UTF-8"); //将请求数据包体json字符串转成byte数组
+						newRequest = helpers.buildHttpMessage(newHeaders, newSignJsonBodyByte);
+						/**转换JSON模块END**/
+
+					} else {	//非json时重新组合参数并更新到请求包中
+						//更新参数Sign
+						IParameter newPara = helpers.buildParameter(signPara, newSign, getSignParaType); //构造新的参数,如果参数是PARAM_JSON类型，这个方法是不适用的
+						newRequest = helpers.updateParameter(newRequest, newPara); //构造新的请求包，这里是方法一updateParameter
+						//更新参数TimeStamp
+						if (timestampPara!=null){
+							String newTimeStamp = updatedParaMap.get(timestampPara).toString();
+							IParameter newPara4timestamp = helpers.buildParameter(timestampPara, newTimeStamp, getTimestampParaType);
+							newRequest = helpers.updateParameter(newRequest, newPara4timestamp); //构造新的请求包，这里是方法一updateParameter
+						}
 					}
-					messageInfo.setRequest(new_Request);//设置最终新的请求包
-	    			stdout.println("Changed Reque" +
+					messageInfo.setRequest(newRequest);//设置最终新的请求包
+					stdout.println("Changed Reque" +
 							"st:");
-	    			stdout.println(new String(messageInfo.getRequest()));
-	    			stdout.print("\r\n");
-	    			//to verify the updated result
+					stdout.println(new String(messageInfo.getRequest()));
+					stdout.print("\r\n");
+					//to verify the updated result
 //	    			for (IParameter para : helpers.analyzeRequest(messageInfo).getParameters()){
 //	    				stdout.println(para.getValue());
 //	    			}
-	    		
 				}
 			}
 		}  		
@@ -840,7 +858,9 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 						paraMap.put(para.getName(), para.getValue().replace("<timestamp>", Long.toString(System.currentTimeMillis())));
 					}
 				}else {
-						paraMap.put(para.getName(), para.getValue());
+						String strChinese_utf8 = new String((para.getValue().getBytes(StandardCharsets.ISO_8859_1)), StandardCharsets.UTF_8);
+						//http传输必须符合ISO8859-1编码规范，b_iso88591的长度为1，而中文字符b_utf8的长度为3，不指定编码会出现转换错误
+						paraMap.put(para.getName(), strChinese_utf8);
 						//stdout.println(para.getName()+":"+para.getValue());
 					}
 				}
@@ -848,16 +868,19 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 		return paraMap;
 	}
 
-	
+	/**以map形式获取参数顺序和列表**/
 	public Map<String, String> getPara(IRequestInfo analyzeRequest){
     	List<IParameter> paras = analyzeRequest.getParameters();//当body是json格式的时候，这个方法也可以正常获取到键值对，牛掰。但是PARAM_JSON等格式不能通过updateParameter方法来更新。
     	Map<String,String> paraMap = new HashMap<String,String>();
     	for (IParameter para:paras){
-    		paraMap.put(para.getName(), para.getValue());
+			String strChinese_utf8 = new String((para.getValue().getBytes(StandardCharsets.ISO_8859_1)), StandardCharsets.UTF_8);
+			//http传输必须符合ISO8859-1编码规范，b_iso88591的长度为1，而中文字符b_utf8的长度为3，不指定编码会出现转换错误
+    		paraMap.put(para.getName(), strChinese_utf8);
     	}
     	return paraMap ;
 	}
-	
+
+	/**获取签名类型，不存在sign参数时为-1，实际上用来判断参数是否存在**/
 	public byte getSignParaType(IRequestInfo analyzeRequest){
 		List<IParameter> paras = analyzeRequest.getParameters();//当body是json格式的时候，这个方法也可以正常获取到键值对，牛掰。但是PARAM_JSON等格式不能通过updateParameter方法来更新。
 		byte signParaType = -1;
