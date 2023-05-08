@@ -49,9 +49,32 @@ public class CMapSort {
 		}
 		return sortedMap;
 	}
-	
-	
-	public static String combineMapEntry(Map<String, String> map, Boolean onlyKeyValue, Boolean onlyValue, String connector, String paraPrefixer, String paraSuffixer){
+
+	public static String combineMapEntry(Map<String, String> map, Boolean onlyKeyValue, Boolean onlyValue, String connector, String paraPrefixer, String paraSuffixer) {
+		StringBuilder sb = new StringBuilder();
+		boolean isFirst = true;
+		for (Map.Entry<String, String> entry : map.entrySet()) {
+			if (!isFirst) {
+				sb.append(connector);
+			}
+			isFirst = false;
+			if (onlyValue) {
+				sb.append(entry.getValue());
+			} else if (onlyKeyValue) {
+				sb.append(entry.getKey()).append(entry.getValue());
+			} else {
+				sb.append(entry);
+			}
+		}
+		if (paraPrefixer != null && !paraPrefixer.isEmpty()) {
+			sb.insert(0, paraPrefixer);
+		}
+		if (paraSuffixer != null && !paraSuffixer.isEmpty()) {
+			sb.append(paraSuffixer);
+		}
+		return sb.toString();
+	}
+	public static String combineMapEntry2(Map<String, String> map, Boolean onlyKeyValue, Boolean onlyValue, String connector, String paraPrefixer, String paraSuffixer){
 		String result = "";
 		if (onlyValue) {
 			for (Map.Entry<String, String> entry : map.entrySet()){

@@ -1,0 +1,117 @@
+以下是本示例的一部分代码，用于创建  `BurpExtender`  类和 GUI：
+from burp import IBurpExtender
+from burp import ITab
+from javax.swing import JFrame, JPanel, JLabel, JTextField, JPasswordField, JCheckBox, JRadioButton, ButtonGroup, JButton, JComboBox
+ class BurpExtender(IBurpExtender, ITab):
+    def registerExtenderCallbacks(self, callbacks):
+        self._callbacks = callbacks
+        self._helpers = callbacks.getHelpers()
+         # 设置插件名称
+        callbacks.setExtensionName('Crypto Tools')
+         # 创建GUI
+        self.frame = JFrame('Crypto Tools')
+        self.frame.setSize(400, 400)
+        self.frame.setLayout(None)
+         # create components
+        self.alg_label = JLabel('Algorithm:')
+        self.alg_label.setBounds(10, 10, 100, 30)
+         self.alg_box = JComboBox(['AES', 'DES', '3DES', 'RSA'])
+        self.alg_box.setBounds(120, 10, 100, 30)
+以上代码创建了一个  `BurpExtender`  类，并注册了一个选项卡  `Crypto Tools` 。在  `registerExtenderCallbacks`  方法中创建了 GUI，并添加了组件  `alg_box` ，该组件用于选择加解密算法。
+ 以下是本示例代码中的另一部分，用于选择加解密算法和分组密码模式：
+# create components
+self.alg_label = JLabel('Algorithm:')
+self.alg_label.setBounds(10, 10, 100, 30)
+ self.alg_box = JComboBox(['AES', 'DES', '3DES', 'RSA'])
+self.alg_box.setBounds(120, 10, 100, 30)
+ self.mode_label = JLabel('Mode:')
+self.mode_label.setBounds(10, 50, 100, 30)
+ self.mode_box = JComboBox(['ECB', 'CBC', 'OFB', 'CFB'])
+self.mode_box.setBounds(120, 50, 100, 30)
+ # add components to panel
+self.panel = JPanel()
+self.panel.setLayout(None)
+self.panel.add(self.alg_label)
+self.panel.add(self.alg_box)
+self.panel.add(self.mode_label)
+self.panel.add(self.mode_box)
+ # add panel to frame
+self.frame.add(self.panel)
+self.frame.setVisible(True)
+以上代码添加了组件  `mode_box` ，该组件用于选择加解密算法的分组密码模式，并将两个组件添加到 GUI 中。
+ 在本示例中，GUI 的实现基于 swing，因此需要使用  `javax.swing`  包。在以上代码中，我使用了  `JComboBox`  组件来实现算法和分组密码模式的选择。
+以下是本示例代码中的另一部分，用于创建输入 key 和 iv 的文本框和按钮：
+# create key and iv fields
+self.key_label = JLabel('Key:')
+self.key_label.setBounds(10, 90, 100, 30)
+self.key_field = JTextField()
+self.key_field.setBounds(120, 90, 200, 30)
+self.iv_label = JLabel('IV:')
+self.iv_label.setBounds(10, 130, 100, 30)
+self.iv_field = JTextField()
+self.iv_field.setBounds(120, 130, 200, 30)
+# add components to panel
+self.panel.add(self.key_label)
+self.panel.add(self.key_field)
+self.panel.add(self.iv_label)
+self.panel.add(self.iv_field)
+# create encrypt and decrypt buttons
+self.encrypt_button = JButton('Encrypt')
+self.encrypt_button.setBounds(120, 170, 80, 30)
+self.decrypt_button = JButton('Decrypt')
+self.decrypt_button.setBounds(240, 170, 80, 30)
+# add components to panel
+self.panel.add(self.encrypt_button)
+self.panel.add(self.decrypt_button)
+# add panel to frame
+self.frame.add(self.panel)
+self.frame.setVisible(True)
+以上代码创建了两个文本框用于输入 key 和 iv，以及加解密按钮。将这些组件添加到 GUI 中。
+ 接下来，我们需要将加密和解密操作与按钮进行关联。代码如下：
+# create key and iv fields
+self.key_label = JLabel('Key:')
+self.key_label.setBounds(10, 90, 100, 30)
+self.key_field = JTextField()
+self.key_field.setBounds(120, 90, 200, 30)
+self.iv_label = JLabel('IV:')
+self.iv_label.setBounds(10, 130, 100, 30)
+self.iv_field = JTextField()
+self.iv_field.setBounds(120, 130, 200, 30)
+# add components to panel
+self.panel.add(self.key_label)
+self.panel.add(self.key_field)
+self.panel.add(self.iv_label)
+self.panel.add(self.iv_field)
+# create encrypt and decrypt buttons
+self.encrypt_button = JButton('Encrypt')
+self.encrypt_button.setBounds(120, 170, 80, 30)
+self.encrypt_button.addActionListener(self.encrypt_request)
+self.decrypt_button = JButton('Decrypt')
+self.decrypt_button.setBounds(240, 170, 80, 30)
+self.decrypt_button.addActionListener(self.decrypt_request)
+# add components to panel
+self.panel.add(self.encrypt_button)
+self.panel.add(self.decrypt_button)
+# add panel to frame
+self.frame.add(self.panel)
+self.frame.setVisible(True)
+ def encrypt_request(self, event):
+    # get selected algorithm and mode
+    selected_alg = self.alg_box.getSelectedItem()
+    selected_mode = self.mode_box.getSelectedItem()
+    # get key and iv
+    key = self.key_field.getText()
+    iv = self.iv_field.getText()
+    # do encryption
+    ...
+ def decrypt_request(self, event):
+    # get selected algorithm and mode
+    selected_alg = self.alg_box.getSelectedItem()
+    selected_mode = self.mode_box.getSelectedItem()
+    # get key and iv
+    key = self.key_field.getText()
+    iv = self.iv_field.getText()
+    # do decryption
+    ...
+以上代码添加了  `encrypt_request`  和  `decrypt_request`  方法，这两个方法将被加解密按钮调用。在这些方法中，将获取选定的加密算法和分组密码模式，以及从文本框中获取 key 和 iv。然后调用加密和解密操作，这些操作将在下一部分中添加。最后，将这些方法与按钮进行关联，以便单击按钮时调用相关方法。
+ 请在下一条回复中查看另一个方法的代码。

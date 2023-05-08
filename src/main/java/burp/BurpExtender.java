@@ -1,45 +1,28 @@
 package burp;
 
 import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
 
-import javax.swing.JCheckBox;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
+import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.EtchedBorder;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.JTextField;
-import javax.swing.RowSorter;
-import javax.swing.SortOrder;
-import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
 
 import java.awt.GridLayout;
 
-import javax.swing.ButtonGroup;
-import javax.swing.JButton;
-import javax.swing.JTextArea;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -52,15 +35,15 @@ import java.awt.Desktop;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.util.stream.Collectors;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONException;
 import com.alibaba.fastjson.JSONObject;
 import custom.CMD5;
 import custom.CSHA1;
-
-import static custom.CString2Other.JSONOString2Map;
-import static custom.CString2Other.JSONString2JSONObj;
-
+import org.apache.commons.lang3.*;
 
 public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContextMenuFactory
 {
@@ -86,7 +69,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 	private final ButtonGroup buttonGroup = new ButtonGroup();
 	private final ButtonGroup buttonGroup1 = new ButtonGroup();
 	private final ButtonGroup buttonGroup2 = new ButtonGroup();
-	public String extenderName = "Resign Plus v1.02 by R4ph4e1";
+	public String extenderName = "Resign Plus v1.04 by R4ph4e1";
 	private JTextField textFieldParaConnector;
 	public JLabel lblOrderMethod;
 	
@@ -128,64 +111,253 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 
     @Override
     public void processHttpMessage(int toolFlag,boolean messageIsRequest,IHttpRequestResponse messageInfo) throws UnsupportedEncodingException {
-    	if (toolFlag == (toolFlag&checkEnabledFor())){ //不同的toolflag代表了不同的burp组件 https://portswigger.net/burp/extender/api/constant-values.html#burp.IBurpExtenderCallbacks
-    		if (messageIsRequest){ //对请求包进行处理
-    			stdout.println("Origin Request:");
-    			stdout.println(new String(messageInfo.getRequest()));
-    			stdout.println("\r\n");
-    			IRequestInfo analyzeRequest = helpers.analyzeRequest(messageInfo); //对消息体进行解析 
-                byte getSignParaType = getSignParaType(analyzeRequest);
-				byte getTimestampParaType = getTimestampParaType(analyzeRequest);
+		// 判断工具标志位是否匹配
+		//不同的toolflag代表了不同的burp组件 https://portswigger.net/burp/extender/api/constant-values.html#burp.IBurpExtenderCallbacks
+		if (toolFlag == (toolFlag & checkEnabledFor())) {
+			// 请求包处理
+			if (messageIsRequest) {
+				// 获取原始请求
+				String originRequest = new String(messageInfo.getRequest());
+				// 输出原始请求
+				callbacks.printOutput("Origin Request:\n");
+				callbacks.printOutput(originRequest + "\n\n");
+				// 解析请求
+    			IRequestInfo analyzedRequest = helpers.analyzeRequest(messageInfo);
+                byte getSignParaType = getParameterType(analyzedRequest, signPara);
+				byte getTimestampParaType = getParameterType(analyzedRequest, timestampPara);
                 //*******************recalculate sign**************************//
-				if (getHost(analyzeRequest).equals(getHostFromUI()) && getSignParaType !=-1){//检查图形面板上的各种参数，都齐备了才进行。
-	    			byte[] newRequest = messageInfo.getRequest();
-					Map updatedParaMap = getUpdatedParaBaseOnTable(analyzeRequest);
-	    			String str = combineString(updatedParaMap,getOnlyKeyValueConfig(),getOnlyValueConfig(),getParaConnector(),getParaPrefixer(),getParaSuffixer());
-	    			//stdout.println("Combined String:"+str);
-					String newSign = calcSign(java.net.URLDecoder.decode(str,"UTF-8"));
-		    		//stdout.println("New Sign:"+newSign); //输出到extender的UI窗口，可以让使用者有一些判断
+				// 判断是否满足更新条件,检查图形面板上的各种参数是否都存在
+				if (getHost(analyzedRequest).equals(getHostFromUI()) && getSignParaType !=-1){
+					// 更新参数
+					Map updatedParaMap = getUpdatedParaMapBaseOnTable(analyzedRequest);
+//					processEscapedJson(updatedParaMap);
+					String updatedParaStr = combineString(updatedParaMap,getOnlyKeyValueConfig(),getOnlyValueConfig(),getParaConnector(),getParaPrefixer(),getParaSuffixer());
+					updatedParaStr=processEscapedString(updatedParaStr);
+					String newSign = calculateNewSign(java.net.URLDecoder.decode(updatedParaStr,"UTF-8"));
 
-					if(analyzeRequest.getContentType()==burp.IRequestInfo.CONTENT_TYPE_JSON){
-
+					if(analyzedRequest.getContentType()==burp.IRequestInfo.CONTENT_TYPE_JSON){
 						//更新参数Sign
 						updatedParaMap.put(signPara,newSign);
-						//得到完整的请求数据
-						String newJsonReq = new String(newRequest,"UTF-8"); //请求整个包
-						/**转换JSON模块START**/
-						List<String> newHeaders = analyzeRequest.getHeaders(); //请求的http头
-						//根据请求数据的起始偏移 在 请求数据中得到请求数据包体（body）
-						String newSignJsonBody = JSON.toJSONString(updatedParaMap);
-						stdout.println("new Sign Json Body:" + newSignJsonBody);
-						byte[] newSignJsonBodyByte = newSignJsonBody.getBytes("UTF-8"); //将请求数据包体json字符串转成byte数组
-						newRequest = helpers.buildHttpMessage(newHeaders, newSignJsonBodyByte);
-						/**转换JSON模块END**/
-
-					} else {	//非json时重新组合参数并更新到请求包中
-						//更新参数Sign
-						IParameter newPara = helpers.buildParameter(signPara, newSign, getSignParaType); //构造新的参数,如果参数是PARAM_JSON类型，这个方法是不适用的
-						newRequest = helpers.updateParameter(newRequest, newPara); //构造新的请求包，这里是方法一updateParameter
-						//更新参数TimeStamp
+						String updatedJsonBody = JSON.toJSONString(updatedParaMap);
+						updatedJsonBody=processEscapedString(processEscapedString(updatedJsonBody));
+						byte[] newRequestBody = updatedJsonBody.getBytes("UTF-8");
+						List<String> newHeaders = analyzedRequest.getHeaders();
+						byte[] newRequest = helpers.buildHttpMessage(newHeaders, newRequestBody);
+						messageInfo.setRequest(newRequest);
+					} else {
+						//非json时，helpers.updateParameter()可以重新组合参数并更新到请求包中
+						//如果参数是PARAM_JSON类型，helpers.updateParameter()方法是不适用的
+						//更新参数列表中的Sign
+						IParameter newSignPara = helpers.buildParameter(signPara, newSign, getSignParaType);
+						byte[] newRequest = helpers.updateParameter(messageInfo.getRequest(), newSignPara);
+						//更新参数列表中TimeStamp
 						if (timestampPara!=null){
-							String newTimeStamp = updatedParaMap.get(timestampPara).toString();
-							IParameter newPara4timestamp = helpers.buildParameter(timestampPara, newTimeStamp, getTimestampParaType);
-							newRequest = helpers.updateParameter(newRequest, newPara4timestamp); //构造新的请求包，这里是方法一updateParameter
+							String newTimestamp = updatedParaMap.get(timestampPara).toString();
+							IParameter newTimestampPara =
+									helpers.buildParameter(timestampPara, newTimestamp, getTimestampParaType);
+							newRequest = helpers.updateParameter(newRequest, newTimestampPara);
 						}
+						messageInfo.setRequest(newRequest);
 					}
-					messageInfo.setRequest(newRequest);//设置最终新的请求包
-					stdout.println("Changed Reque" +
-							"st:");
-					stdout.println(new String(messageInfo.getRequest()));
-					stdout.print("\r\n");
-					//to verify the updated result
-//	    			for (IParameter para : helpers.analyzeRequest(messageInfo).getParameters()){
-//	    				stdout.println(para.getValue());
-//	    			}
+					callbacks.printOutput("Changed Request:\n");
+					callbacks.printOutput(new String(messageInfo.getRequest()) + "\n\n");
 				}
 			}
 		}  		
 	}
 
-    
+	public static String processEscapedString (String str) {
+		boolean hasEscapedChars = str.contains("\\\"");
+//		String unescapedString = "";
+		if (hasEscapedChars) {
+			str= str.replace("\\\"", "\"");
+
+		}
+    	return str;
+	}
+
+    /**
+     * Processes escaped JSON strings in a given Map.
+     */
+    public static void processEscapedJson(Map<String, Object> map) {
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            Object value = entry.getValue();
+            if (value == null) {
+                continue;
+            } else if (value instanceof String) {
+                String stringValue = (String) value;
+                boolean hasEscapedChars = stringValue.contains("\\\"");
+                if (hasEscapedChars && isJson(stringValue)) {
+                    String unescapedString = JSON.parseObject(stringValue, String.class);
+                    map.put(entry.getKey(), unescapedString);
+                }
+            } else if (value instanceof Map) {
+                processEscapedJson((Map<String, Object>) value);
+            }
+        }
+    }
+
+    /**
+     * Returns true if the given string is valid JSON.
+     */
+    private static boolean isJson(String str) {
+        try {
+            JSONObject.parseObject(str);
+            return true;
+        } catch (JSONException e) {
+            return false;
+        }
+    }
+
+	private Map<String, String> getUpdatedParaMapBaseOnTable(IRequestInfo request) {
+		//当body是json格式的时候，这个方法也可以正常获取到键值对
+    	List<IParameter> paras = request.getParameters();
+		Map<String,String> paraMap = getParaFromTable();
+		for (IParameter para:paras){
+			String paraName = para.getName();
+			String paraValue = para.getValue();
+
+			if (paraMap.containsKey(paraName)) {
+				String valueInParaMap = paraMap.get(paraName);
+
+				if (valueInParaMap.contains("<timestamp>")) {
+					String timestamp = Long.toString(System.currentTimeMillis() / 1000);
+					if (!get10timestamp()) {
+						timestamp = Long.toString(System.currentTimeMillis());
+					}
+					paraValue = paraValue.replace("<timestamp>", timestamp);
+				} else {
+					//http传输必须符合ISO8859-1编码规范，b_iso88591的长度为1，而中文字符b_utf8的长度为3，不指定编码会出现转换错误。
+					//timestamp一定是数字型，无需中文转换。其他的参数都需要进行一次utf-8转换防止中文乱码。
+					String strChineseUTF8 = new String((paraValue.getBytes(StandardCharsets.ISO_8859_1)), StandardCharsets.UTF_8);
+					paraValue = strChineseUTF8;
+				}
+				paraMap.put(paraName, paraValue);
+			}
+		}
+		return paraMap;
+	}
+
+	// Function to combine strings from a map
+	public String combineString(Map<String, String> paraMap, boolean onlyKeyValue, boolean onlyValue, String paraConnector, String paraPrefixer, String paraSuffixer) {
+		// Get the secret key configuration
+		getSecKeyConfig();
+		// Create a string builder
+		StringBuilder sb = new StringBuilder();
+		// If the key is the same as the parameter
+		if ("sameAsPara".equals(howDealKey)){
+			// Get the text from the secret key
+			secretKey = textFieldSecretKey.getText();
+			// If the secret key contains an equal sign and has two parts
+			if(secretKey.contains("=") & secretKey.split("=").length==2){
+				// Put the key and value into the map
+				paraMap.put(secretKey.split("=")[0], secretKey.split("=")[1]);
+			}
+		}
+		// If the order method is custom
+		if ("Custom Order".equals(lblOrderMethod.getText())) {
+			// Set a boolean to track if it is the first entry
+			boolean isFirst = true;
+			// Loop through each entry in the map
+			for (Map.Entry<String, String> para : paraMap.entrySet()) {
+				// If it is not the first entry
+				if (!isFirst) {
+					// Append the connector
+					sb.append(paraConnector);
+				}
+				// Set the boolean to false
+				isFirst = false;
+				// If only the value should be used
+				if (onlyValue) {
+					// Append the value
+					sb.append(para.getValue());
+				// If only the key and value should be used
+				} else if (onlyKeyValue) {
+					// Append the key and value
+					sb.append(para.getKey()).append(para.getValue());
+				// Otherwise
+				} else {
+					// Append the entry
+					sb.append(para);
+				}
+			}
+			// If there is a prefixer
+			if (paraPrefixer != null && !paraPrefixer.isEmpty()) {
+				// Insert the prefixer at the beginning
+				sb.insert(0, paraPrefixer);
+			}
+			// If there is a suffixer
+			if (paraSuffixer != null && !paraSuffixer.isEmpty()) {
+				// Append the suffixer
+				sb.append(paraSuffixer);
+			}
+		// Otherwise
+		} else {
+			// Create a sorted map
+			Map<String, String> sortedMap;
+			// If the sorted column is 0
+			if(sortedColumn == 0) {
+				// Sort the map by key
+				sortedMap = custom.CMapSort.sortMapByKey(paraMap, sortedMethod.toString());
+			// Otherwise
+			} else {
+				// Sort the map by value
+				sortedMap = custom.CMapSort.sortMapByValue(paraMap, sortedMethod.toString());
+			}
+			// Append the combined map entry
+			sb.append(custom.CMapSort.combineMapEntry(sortedMap, onlyKeyValue, onlyValue, paraConnector, paraPrefixer, paraSuffixer));
+		}
+		// If the key should be appended to the end
+		if ("appendToEnd".equals(howDealKey)) {
+			// Get the text from the secret key
+			secretKey = textFieldSecretKey.getText();
+			// Append the secret key
+			sb.append(secretKey);
+		}
+		// Return the string
+		return sb.toString();
+	}
+	
+
+	//两个核心方法：1是拼接字符串，2是计算出sign
+	public String calculateNewSign(String str){
+		String sign = "Sign Error";
+		if ("MD5l".equals(getSignAlgorithm())) { // 需要输出小写字母的 MD5
+			sign = CMD5.GetMD5Code(str).toLowerCase(); // 将字符串转为小写后计算 MD5
+		} else if ("MD5u".equals(getSignAlgorithm())) { // 需要输出大写字母的 MD5
+			sign = CMD5.GetMD5Code(str).toUpperCase(); // 将字符串转为大写后计算 MD5
+		} else if ("SHA1".equals(getSignAlgorithm())) {
+			sign = CSHA1.SHA1(str);
+		}
+		return sign;
+	}
+
+	public Map<String, String> getParaFromTable() {
+		Map<String, String> tableParas = new LinkedHashMap<>();
+		for (int i = 0; i < table.getRowCount(); i++) {
+			String key = table.getValueAt(i, 0).toString();
+			String value = table.getValueAt(i, 1).toString();
+
+			if (!key.equals(getSignPara())) {
+				tableParas.put(key, value);
+			}
+		}
+		return tableParas;
+	}
+
+	public String getHost(IRequestInfo analyzeRequest) {
+		List<String> headers = analyzeRequest.getHeaders();
+		String domain = "";
+		for (String header : headers) {
+			if (header.toLowerCase().startsWith("host:")) { // 使用 startsWith() 方法判断是否包含 Host 字段
+				domain = header.substring(5).trim(); // 将 Host 字段的值提取出来，并去除前后空格
+				break; // 找到 Host 字段后即可退出循环
+			}
+		}
+		return domain;
+	}
+
+
 	public void CGUI() {
 		
 		contentPane = new JPanel();
@@ -338,92 +510,165 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 		JButton btnMoveDown = new JButton("Move Down");
 		btnMoveDown.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				if (table.getSelectedRow() != -1 && table.getSelectedRow()+1 <= table.getRowCount()-1){
-					try{
-						int row = table.getSelectedRow();
-						String xkey = table.getValueAt(row, 0).toString();
-						String xvalue = table.getValueAt(row, 1).toString();
-						
-						String tmpkey = table.getValueAt(row+1, 0).toString();
-						String tmpvalue = table.getValueAt(row+1, 1).toString();
-						
-						//do exchange 
-						tableModel.setValueAt(tmpkey, row, 0);
-						tableModel.setValueAt(tmpvalue, row, 1);
-						
-						tableModel.setValueAt(xkey, row+1, 0);
-						tableModel.setValueAt(xvalue, row+1, 1);
-						
-						table.setRowSelectionInterval(row+1, row+1);//set the line selected
-
-						lblOrderMethod.setText("Custom Order");
-					}catch(Exception e1){
-						BurpExtender.this.callbacks.printError(e1.getMessage());
-						
+				int selectedRow = table.getSelectedRow();
+				int rowCount = table.getRowCount();
+				if (selectedRow >= 0 && selectedRow < rowCount - 1) {
+					Object[] selectedRowData = new Object[table.getColumnCount()];
+					Object[] nextRowData = new Object[table.getColumnCount()];
+					for (int i = 0; i < table.getColumnCount(); i++) {
+						selectedRowData[i] = table.getValueAt(selectedRow, i);
+						nextRowData[i] = table.getValueAt(selectedRow + 1, i);
 					}
-					
-					
+					((DefaultTableModel) table.getModel()).removeRow(selectedRow);
+					((DefaultTableModel) table.getModel()).insertRow(selectedRow, nextRowData);
+					((DefaultTableModel) table.getModel()).removeRow(selectedRow + 1);
+					((DefaultTableModel) table.getModel()).insertRow(selectedRow + 1, selectedRowData);
+					table.setRowSelectionInterval(selectedRow + 1, selectedRow + 1);
+					lblOrderMethod.setText("Custom Order");
+				} else if (selectedRow == rowCount - 1) {
+					JOptionPane.showMessageDialog(null, "最后一行不能再向下移动！");
 				}
 			}
 		});
+		// btnMoveDown.addActionListener(new ActionListener() {
+		// 	public void actionPerformed(ActionEvent e) {
+		// 		// if (table.getSelectedRow() != -1 && table.getSelectedRow()+1 <= table.getRowCount()-1){
+		// 		if (table.getSelectedRow() + 1 < table.getRowCount()) {
+		// 			try{
+		// 				int row = table.getSelectedRow();
+		// 				String xkey = table.getValueAt(row, 0).toString();
+		// 				String xvalue = table.getValueAt(row, 1).toString();
+						
+		// 				String tmpkey = table.getValueAt(row+1, 0).toString();
+		// 				String tmpvalue = table.getValueAt(row+1, 1).toString();
+						
+		// 				//do exchange 
+		// 				tableModel.setValueAt(tmpkey, row, 0);
+		// 				tableModel.setValueAt(tmpvalue, row, 1);
+						
+		// 				tableModel.setValueAt(xkey, row+1, 0);
+		// 				tableModel.setValueAt(xvalue, row+1, 1);
+						
+		// 				table.setRowSelectionInterval(row+1, row+1);//set the line selected
+
+		// 				lblOrderMethod.setText("Custom Order");
+		// 			} catch (IndexOutOfBoundsException e1) {
+		// 				BurpExtender.this.callbacks.printError(e1.getMessage());
+		// 			}
+		// 		}
+		// 	}
+		// });
 		
+		// JButton btnMoveUp = new JButton("Move Up");
+		// btnMoveUp.addActionListener(new ActionListener() {
+		// 	public void actionPerformed(ActionEvent e) {
+		// 		if (table.getSelectedRow() != -1 && table.getSelectedRow()-1 >=0){
+		// 			try {
+		// 				int row = table.getSelectedRow();
+		// 				String xkey = table.getValueAt(row, 0).toString();
+		// 				String xvalue = table.getValueAt(row, 1).toString();
+						
+		// 				String tmpkey = table.getValueAt(row-1, 0).toString();
+		// 				String tmpvalue = table.getValueAt(row-1, 1).toString();
+						
+		// 				//do exchange 
+		// 				tableModel.setValueAt(tmpkey, row, 0);
+		// 				tableModel.setValueAt(tmpvalue, row, 1);
+						
+		// 				tableModel.setValueAt(xkey, row-1, 0);
+		// 				tableModel.setValueAt(xvalue, row-1, 1);
+						
+		// 				table.setRowSelectionInterval(row-1, row-1);
+						
+		// 				lblOrderMethod.setText("Custom Order");
+		// 			} catch (Exception e2) {
+		// 				// TODO: handle exception
+		// 				BurpExtender.this.callbacks.printError(e2.getMessage());
+		// 			}
+
+		// 		}
+		// 	}
+		// });
+
 		JButton btnMoveUp = new JButton("Move Up");
 		btnMoveUp.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				if (table.getSelectedRow() != -1 && table.getSelectedRow()-1 >=0){
-					try {
-						int row = table.getSelectedRow();
-						String xkey = table.getValueAt(row, 0).toString();
-						String xvalue = table.getValueAt(row, 1).toString();
-						
-						String tmpkey = table.getValueAt(row-1, 0).toString();
-						String tmpvalue = table.getValueAt(row-1, 1).toString();
-						
-						//do exchange 
-						tableModel.setValueAt(tmpkey, row, 0);
-						tableModel.setValueAt(tmpvalue, row, 1);
-						
-						tableModel.setValueAt(xkey, row-1, 0);
-						tableModel.setValueAt(xvalue, row-1, 1);
-						
-						table.setRowSelectionInterval(row-1, row-1);
-						
-						lblOrderMethod.setText("Custom Order");
-					} catch (Exception e2) {
-						// TODO: handle exception
-						BurpExtender.this.callbacks.printError(e2.getMessage());
-					}
-
+				int selectedRow = table.getSelectedRow();
+				if (selectedRow > 0) {
+					DefaultTableModel model = (DefaultTableModel) table.getModel();
+					model.moveRow(selectedRow, selectedRow, selectedRow - 1); // Move row up
+					table.setRowSelectionInterval(selectedRow - 1, selectedRow - 1); // Select moved row
+					lblOrderMethod.setText("Custom Order");
+				} else if (selectedRow == 0) {
+					JOptionPane.showMessageDialog(null, "已经到达第一行，不能再向上移动！");
 				}
 			}
 		});
 		
+		// JButton btnAdd = new JButton("Add");
+		// btnAdd.addActionListener(new ActionListener() {
+		// 	public void actionPerformed(ActionEvent e) {
+		// 		DefaultTableModel model = (DefaultTableModel) table.getModel();
+		// 		model.addRow(new Object[]{"key","value"});
+		// 		lblOrderMethod.setText("Custom Order");
+		// 	}
+		// });
+		
+		// JButton btnNewButton = new JButton("Remove");
+		// btnNewButton.addActionListener(new ActionListener() {
+		// 	public void actionPerformed(ActionEvent e) {
+		// 		int[] rowindexs = table.getSelectedRows();
+		// 		for (int i=0; i < rowindexs.length; i++){
+		// 			rowindexs[i] = table.convertRowIndexToModel(rowindexs[i]);//转换为Model的索引，否则排序后索引不对应。
+		// 		}
+		// 		Arrays.sort(rowindexs);
+				
+		// 		DefaultTableModel tableModel = (DefaultTableModel) table.getModel();
+		// 		for(int i=rowindexs.length-1;i>=0;i--){
+		// 			tableModel.removeRow(rowindexs[i]);
+		// 		}
+		// 		lblOrderMethod.setText("Custom Order");
+		// 	}
+		// });
 		JButton btnAdd = new JButton("Add");
 		btnAdd.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				DefaultTableModel model = (DefaultTableModel) table.getModel();
-				model.addRow(new Object[]{"key","value"});
-				lblOrderMethod.setText("Custom Order");
+				int selectedRow = table.getSelectedRow();
+				if (selectedRow == -1) {
+					JOptionPane.showMessageDialog(null, "请先选中一个单元格！");
+				} else {
+					Object[] rowData = new Object[table.getColumnCount()];
+					for (int i = 0; i < table.getColumnCount(); i++) {
+						rowData[i] = "";
+					}
+					int rowCount = table.getRowCount();
+					if (selectedRow < rowCount - 1) {
+						((DefaultTableModel) table.getModel()).insertRow(selectedRow + 1, rowData);
+						table.setRowSelectionInterval(selectedRow + 1, selectedRow + 1);
+					} else {
+						((DefaultTableModel) table.getModel()).addRow(rowData);
+						table.setRowSelectionInterval(rowCount, rowCount);
+					}
+					lblOrderMethod.setText("Custom Order");
+				}
 			}
-		});
-		
+		});;
 		JButton btnNewButton = new JButton("Remove");
 		btnNewButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				int[] rowindexs = table.getSelectedRows();
-				for (int i=0; i < rowindexs.length; i++){
-					rowindexs[i] = table.convertRowIndexToModel(rowindexs[i]);//转换为Model的索引，否则排序后索引不对应。
+				int[] selectedRows = table.getSelectedRows(); // 获取被选中的行的索引
+				if (selectedRows.length == 0) { // 如果没有选中行，弹出提示框，直接返回
+					JOptionPane.showMessageDialog(null, "Please select at least one row to delete.");
+					return;
 				}
-				Arrays.sort(rowindexs);
-				
-				DefaultTableModel tableModel = (DefaultTableModel) table.getModel();
-				for(int i=rowindexs.length-1;i>=0;i--){
-					tableModel.removeRow(rowindexs[i]);
+				DefaultTableModel tableModel = (DefaultTableModel) table.getModel(); // 获取表格模型
+				for(int i=selectedRows.length-1; i>=0; i--){ // 从最后一行开始往上删除
+					int row = table.convertRowIndexToModel(selectedRows[i]); 
+					tableModel.removeRow(row);
 				}
-				lblOrderMethod.setText("Custom Order");
+				lblOrderMethod.setText("Custom Order"); // 更新状态
 			}
 		});
-		
 		
 		lblOrderMethod = new JLabel("Custom Order");
 		GridBagConstraints gbc_lblOrderMethod = new GridBagConstraints();
@@ -669,7 +914,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 		JButton btnSign = new JButton("Sign");
 		btnSign.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				textAreaSign.setText(calcSign(textAreaFinalString.getText()));
+				textAreaSign.setText(calculateNewSign(textAreaFinalString.getText()));
 			}
 		});
 		panel_11.add(btnSign);
@@ -770,169 +1015,43 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 		}
 	}
 	
-	
-	
-	//两个核心方法：1是拼接字符串，2是计算出sign
-	public String calcSign(String str){
-		String sign = "Sign Error";
-		//System.out.print(getSignAlgorithm());
-		if (getSignAlgorithm().equals("MD5l")){
-			sign = CMD5.GetMD5Code(str);
-		}else if (getSignAlgorithm().equals("MD5u")){
-			sign = (CMD5.GetMD5Code(str)).toUpperCase();
-		}else if (getSignAlgorithm().equals("SHA1")) {
-			sign = CSHA1.SHA1(str);
-		}
-		return sign;
-	}
-
-	
-	//两个核心方法：1是拼接字符串，2是计算出sign
-	public String combineString(Map<String, String> paraMap, boolean onlyKeyValue, boolean onlyValue, String paraConnector, String paraPrefixer, String paraSuffixer) {
-		getSecKeyConfig();
-		
-		String finalString = "";
-		
-		if (howDealKey.equals("sameAsPara")){
-			secretKey = textFieldSecretKey.getText();
-			if(secretKey.contains("=") & secretKey.split("=").length==2){
-				paraMap.put(secretKey.split("=")[0], secretKey.split("=")[1]);
-			}
-		}
-		
-		
-		if (lblOrderMethod.getText().equals("Custom Order")){//sortedColumn == -1 || 
-			for(Map.Entry<String,String>para:paraMap.entrySet()){
-				if (!finalString.equals("")){
-					finalString += paraConnector;
-				}
-				if (onlyValue){
-					finalString += para.getValue();
-				}else if(onlyKeyValue) {
-					finalString += para.getKey();
-					finalString += para.getValue();
-				}else {
-					finalString += para;
-				}
-			}
-			if (paraPrefixer != null && !paraPrefixer.equals("")){
-				finalString = paraPrefixer + finalString;
-			}
-			if (paraSuffixer != null && !paraSuffixer.equals("")){
-				finalString += paraSuffixer;
-			}
-		}else if(sortedColumn == 0) {
-			if (sortedMethod.toString() == "ASCENDING"){
-				finalString = custom.CMapSort.combineMapEntry(custom.CMapSort.sortMapByKey(paraMap,"ASCENDING"), onlyKeyValue, onlyValue, paraConnector, paraPrefixer, paraSuffixer);
-			}else if (sortedMethod.toString() == "DESCENDING") {
-				finalString = custom.CMapSort.combineMapEntry(custom.CMapSort.sortMapByKey(paraMap,"DESCENDING"), onlyKeyValue, onlyValue, paraConnector, paraPrefixer, paraSuffixer);
-			}
-		}
-		else if (sortedColumn == 1) {
-			if (sortedMethod.toString() == "ASCENDING"){
-				finalString = custom.CMapSort.combineMapEntry(custom.CMapSort.sortMapByKey(paraMap,"ASCENDING"), onlyKeyValue, onlyValue, paraConnector, paraPrefixer, paraSuffixer);
-			}else if (sortedMethod.toString() == "DESCENDING") {
-				finalString = custom.CMapSort.combineMapEntry(custom.CMapSort.sortMapByKey(paraMap,"DESCENDING"), onlyKeyValue, onlyValue, paraConnector, paraPrefixer, paraSuffixer);
-			}
-		}
-		
-		
-		if (howDealKey.equals("appendToEnd")){
-			secretKey = textFieldSecretKey.getText();
-			finalString += secretKey;
-		}
-		return finalString;
-	}
-	
-	
-	//根据GUI中的有序参数列表，更新当前请求的参数列表。
-	public Map<String, String> getUpdatedParaBaseOnTable(IRequestInfo analyzeRequest){
-    	List<IParameter> paras = analyzeRequest.getParameters();//当body是json格式的时候，这个方法也可以正常获取到键值对，牛掰。但是PARAM_JSON等格式不能通过updateParameter方法来更新。
-		Map<String,String> paraMap = getParaFromTable();
-    	for (IParameter para:paras){//遍历请求参数
-			if (paraMap.keySet().contains(para.getName())){//匹配所有指定需要动态计算签名的参数序列
-				if (paraMap.get(para.getName()).contains("<timestamp>")) {//判断请求参数的值是否被标记为<timestamp>
-					if (get10timestamp()) {
-						paraMap.put(para.getName(), para.getValue().replace("<timestamp>", Long.toString(System.currentTimeMillis() / 1000)));
-					}else {
-						paraMap.put(para.getName(), para.getValue().replace("<timestamp>", Long.toString(System.currentTimeMillis())));
-					}
-				}else {
-						String strChinese_utf8 = new String((para.getValue().getBytes(StandardCharsets.ISO_8859_1)), StandardCharsets.UTF_8);
-						//http传输必须符合ISO8859-1编码规范，b_iso88591的长度为1，而中文字符b_utf8的长度为3，不指定编码会出现转换错误
-						paraMap.put(para.getName(), strChinese_utf8);
-						//stdout.println(para.getName()+":"+para.getValue());
-					}
-				}
-			}
-		return paraMap;
-	}
 
 	/**以map形式获取参数顺序和列表**/
 	public Map<String, String> getPara(IRequestInfo analyzeRequest){
     	List<IParameter> paras = analyzeRequest.getParameters();//当body是json格式的时候，这个方法也可以正常获取到键值对，牛掰。但是PARAM_JSON等格式不能通过updateParameter方法来更新。
     	Map<String,String> paraMap = new HashMap<String,String>();
     	for (IParameter para:paras){
-			String strChinese_utf8 = new String((para.getValue().getBytes(StandardCharsets.ISO_8859_1)), StandardCharsets.UTF_8);
 			//http传输必须符合ISO8859-1编码规范，b_iso88591的长度为1，而中文字符b_utf8的长度为3，不指定编码会出现转换错误
-    		paraMap.put(para.getName(), strChinese_utf8);
+			String strChineseUTF8 = new String((para.getValue().getBytes(StandardCharsets.ISO_8859_1)), StandardCharsets.UTF_8);
+    		paraMap.put(para.getName(), strChineseUTF8);
     	}
     	return paraMap ;
 	}
 
-	/**获取签名类型，不存在sign参数时为-1，实际上用来判断参数是否存在**/
-	public byte getSignParaType(IRequestInfo analyzeRequest){
-		List<IParameter> paras = analyzeRequest.getParameters();//当body是json格式的时候，这个方法也可以正常获取到键值对，牛掰。但是PARAM_JSON等格式不能通过updateParameter方法来更新。
-		byte signParaType = -1;
-		for (IParameter para:paras){
-    		if (para.getName().equals(signPara)){
-    			signParaType = para.getType();
-    			
-    		}
-    	}
-		return signParaType;
+	/**以map形式获取参数顺序和列表**/
+	public Map<String, String> getPara2(IRequestInfo analyzeRequest){
+		List<IParameter> paras = analyzeRequest.getParameters();
+		return paras.stream()
+				.collect(Collectors.toMap(IParameter::getName, para -> {
+					try {
+						return URLEncoder.encode(para.getValue(), "UTF-8");
+					} catch (UnsupportedEncodingException e) {
+						throw new RuntimeException(e);
+					}
+				}));
 	}
-	public byte getTimestampParaType(IRequestInfo analyzeRequest){
-		List<IParameter> paras = analyzeRequest.getParameters();//当body是json格式的时候，这个方法也可以正常获取到键值对，牛掰。但是PARAM_JSON等格式不能通过updateParameter方法来更新。
-		byte timestampParaType = -1;
-		for (IParameter para:paras){
-			if (para.getName().equals(timestampPara)){
-				timestampParaType = para.getType();
 
+	/**获取签名或者时间戳的类型，不存在sign参数时为-1，实际上用来判断参数是否存在**/
+	private byte getParameterType(IRequestInfo request, String parameterName) {
+		List<IParameter> parameters = request.getParameters();
+		for (IParameter parameter : parameters) {
+			if (parameter.getName().equals(parameterName)) {
+				return parameter.getType();
 			}
 		}
-		return timestampParaType;
+		return -1;
 	}
 
-
-
-	public Map<String, String> getParaFromTable(){
-		Map<String, String> tableParas = new LinkedHashMap<String, String>();
-    	for (int i=0; i<table.getRowCount();i++){
-    		//System.out.println(table.getRowCount());
-    		String key = table.getValueAt(i, 0).toString();
-    		//System.out.println(key);
-    		String value = table.getValueAt(i, 1).toString();
-    		//System.out.println(value);
-
-    		if (!key.equals(getSignPara())){
-    			tableParas.put(key, value);
-    		}
-    	}
-    	System.out.println(tableParas);
-    	return tableParas;
-	}
-	
-	public String getHost(IRequestInfo analyzeRequest){
-    	List<String> headers = analyzeRequest.getHeaders();
-    	String domain = "";
-    	for(String item:headers){
-    		if (item.toLowerCase().contains("host")){
-    			domain = new String(item.substring(6));
-    		}
-    	}
-    	return domain ;
-	}
 	
 	public String getHostFromUI(){
     	String domain = "";

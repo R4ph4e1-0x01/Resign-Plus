@@ -1,0 +1,183 @@
+from burp import IBurpExtender, IHttpListener, IMessageEditorTab
+from javax.swing import JPanel, BoxLayout, JLabel, JTextField, JButton, Box, JComboBox
+from javax.crypto import Cipher
+from javax.crypto.spec import SecretKeySpec, IvParameterSpec
+from javax.crypto.spec import DESKeySpec
+from javax.crypto import KeyGenerator
+from javax.crypto import Mac
+from javax.crypto import SecretKeyFactory
+from javax.crypto.spec import PBEKeySpec
+from javax.crypto.spec import DHPublicKeySpec
+from javax.crypto.spec import X509EncodedKeySpec
+from javax.crypto.interfaces import DHPrivateKey, DHPublicKey
+from javax.crypto import KeyAgreement
+from java.security import KeyPairGenerator, KeyFactory, KeyPair
+from java.security.spec import X509EncodedKeySpec, PKCS8EncodedKeySpec
+from java.security.spec import RSAPrivateKeySpec, RSAPublicKeySpec, ECPrivateKeySpec, ECPublicKeySpec
+from java.math import BigInteger
+import base64
+ class BurpExtender(IBurpExtender, IHttpListener, IMessageEditorTab):
+    def registerExtenderCallbacks(self, callbacks):
+        self._callbacks = callbacks
+        self._helpers = callbacks.getHelpers()
+        callbacks.setExtensionName("Encryption Helper")
+         # GUI setup
+        self._panel = JPanel()
+        self._panel.setLayout(BoxLayout(self._panel, BoxLayout.PAGE_AXIS))
+        self._algorithm_label = JLabel("Algorithm: ")
+        self._algorithm_btn = JComboBox(["AES", "DES", "3DES", "RSA"])
+        self._key_label = JLabel("Key: ")
+        self._key_field = JTextField(30)
+        self._iv_label = JLabel("IV: ")
+        self._iv_field = JTextField(30)
+        self._btn_panel = JPanel()
+        self._btn_panel.setLayout(Box.createHorizontalBox())
+        self._encrypt_btn = JButton("Encrypt", actionPerformed=self.encrypt)
+        self._decrypt_btn = JButton("Decrypt", actionPerformed=self.decrypt)
+        self._btn_panel.add(self._encrypt_btn)
+        self._btn_panel.add(self._decrypt_btn)
+        self._panel.add(self._algorithm_label)
+        self._panel.add(self._algorithm_btn)
+        self._panel.add(self._key_label)
+        self._panel.add(self._key_field)
+        self._panel.add(self._iv_label)
+        self._panel.add(self._iv_field)
+        self._panel.add(self._btn_panel)
+         callbacks.customizeUiComponent(self._panel)
+        callbacks.addSuiteTab(self)
+     def getTabCaption(self):
+        return "Encryption Helper"
+     def getUiComponent(self):
+        return self._panel
+     def encrypt(self, event):
+        # obtain user input
+        algorithm = self._algorithm_btn.getSelectedItem()
+        key = self._key_field.getText()
+        iv = self._iv_field.getText()
+         # get selected cipher instance
+        cipher = None
+        if algorithm == "AES":
+            cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        elif algorithm == "DES":
+            cipher = Cipher.getInstance("DES/CBC/PKCS5Padding")
+        elif algorithm == "3DES":
+            cipher = Cipher.getInstance("DESede/CBC/PKCS5Padding")
+        elif algorithm == "RSA":
+            cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+         # initialize the cipher
+        if algorithm != "RSA":
+            key_spec = None
+            iv_spec = None
+            if iv:
+                iv_spec = IvParameterSpec(iv)
+            if algorithm == "AES":
+                key_spec = SecretKeySpec(key, "AES")
+            elif algorithm == "DES":
+                key_spec = DESKeySpec(key)
+            elif algorithm == "3DES":
+                key_spec = DESedeKeySpec(key)
+            cipher.init(Cipher.ENCRYPT_MODE, key_spec, iv_spec)
+        else:
+            # RSA encryption requires public key
+            key_factory = KeyFactory.getInstance("RSA")
+            pub_key = key_factory.generatePublic(X509EncodedKeySpec(key))
+            cipher.init(Cipher.ENCRYPT_MODE, pub_key)
+         # encrypt the test message
+        message_bytes = self._helpers.stringToBytes(self._helpers.bytesToString(self._callbacks.getSelectedMessages()[0].getRequest()))
+        output = cipher.doFinal(message_bytes)
+         # display the encrypted message
+        self._callbacks.addScanIssue(EncryptedMessageTab(self._callbacks, self._helpers, output))
+     def decrypt(self, event):
+        # obtain user input
+        algorithm = self._algorithm_btn.getSelectedItem()
+        key = self._key_field.getText()
+        iv = self._iv_field.getText()
+         # get selected cipher instance
+        cipher = None
+        if algorithm == "AES":
+            cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        elif algorithm == "DES":
+            cipher = Cipher.getInstance("DES/CBC/PKCS5Padding")
+        elif algorithm == "3DES":
+            cipher = Cipher.getInstance("DESede/CBC/PKCS5Padding")
+        elif algorithm == "RSA":
+            cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+         # initialize the cipher
+        if algorithm != "RSA":
+            key_spec = None
+            iv_spec = None
+            if iv:
+                iv_spec = IvParameterSpec(iv)
+            if algorithm == "AES":
+                key_spec = SecretKeySpec(key, "AES")
+            elif algorithm == "DES":
+                key_spec = DESKeySpec(key)
+            elif algorithm == "3DES":
+                key_spec = DESedeKeySpec(key)
+            cipher.init(Cipher.DECRYPT_MODE, key_spec, iv_spec)
+        else:
+            # RSA decryption requires private key
+            key_factory = KeyFactory.getInstance("RSA")
+            priv_key = key_factory.generatePrivate(PKCS8EncodedKeySpec(key))
+            cipher.init(Cipher.DECRYPT_MODE, priv_key)
+         # decrypt the test message
+        message_bytes = self._helpers.stringToBytes(self._helpers.bytesToString(self._callbacks.getSelectedMessages()[0].getRequest()))
+        output = cipher.doFinal(message_bytes)
+         # display the decrypted message
+        self._callbacks.addScanIssue(DecryptedMessageTab(self._callbacks, self._helpers, output))
+ class EncryptedMessageTab(IMessageEditorTab):
+    def __init__(self, callbacks, helpers, encrypted_data):
+        self._callbacks = callbacks
+        self._helpers = helpers
+        self._encrypted_data = encrypted_data
+     def getTabCaption(self):
+        return "Encrypted"
+     def getUiComponent(self):
+        return self._helpers.getTextEditor().getComponent()
+     def isEnabled(self, content, isRequest):
+        return isRequest
+     def setMessage(self, content, isRequest):
+        if self._encrypted_data:
+            self._callbacks.printOutput("Decrypting message...")
+            # decrypt the message
+            message_bytes = self._helpers.stringToBytes(self._helpers.bytesToString(content))
+            cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            iv_spec = IvParameterSpec(base64.b64decode("qTfjK8oPX0R0bR95sT1tXA=="))
+            key_spec = SecretKeySpec(base64.b64decode("mysecretkey123456"), "AES")
+            cipher.init(Cipher.DECRYPT_MODE, key_spec, iv_spec)
+            output = cipher.doFinal(message_bytes)
+            edited_message = self._helpers.buildHttpMessage([], output)
+            self._callbacks.printOutput("Message decrypted!")
+        else:
+            edited_message = content
+        self._helpers = self._helpers.analyzeRequest(edited_message)
+        self._callbacks.applyMarkers(None, self._helpers.getRequestMarkers(None), None)
+        self._helpers = self._helpers.updateParameter(edited_message)
+        self._callbacks.applyMarkers(None, self._helpers.getRequestMarkers(None), None)
+     def getMessage(self):
+        return self._encrypted_data
+     def isModified(self):
+        return False
+     def getSelectedData(self):
+        return self._encrypted_data
+ class DecryptedMessageTab(IMessageEditorTab):
+    def __init__(self, callbacks, helpers, decrypted_data):
+        self._callbacks = callbacks
+        self._helpers = helpers
+        self._decrypted_data = decrypted_data
+     def getTabCaption(self):
+        return "Decrypted"
+     def getUiComponent(self):
+        return self._helpers.getTextEditor().getComponent()
+     def isEnabled(self, content, isRequest):
+        return isRequest
+     def setMessage(self, content, isRequest):
+        if self._decrypted_data:
+            edited_message = self._helpers.buildHttpMessage([], self._decrypted_data)
+        else:
+            edited_message = content
+        self._helpers = self._helpers.analyzeRequest(edited_message)
+        self._callbacks.applyMarkers(None, self._helpers.getRequestMarkers(None), None)
+        self._helpers = self._helpers.updateParameter(edited_message)
+        self._callbacks.applyMarkers(None, self._helpers.getRequestMarkers(None), None)
+     def getMessage(
