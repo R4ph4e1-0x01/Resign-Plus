@@ -1,4 +1,4 @@
-package custom;
+package custom.Algorithm;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

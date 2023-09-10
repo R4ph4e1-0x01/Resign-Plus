@@ -1,4 +1,5 @@
-package custom;
+package custom.util;
+
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -12,7 +13,9 @@ public class CMapSort {
 		if (map == null || map.isEmpty()) {
 			return null;
 		}
-		if (sortMethod.equals("ASCENDING")){
+		if (sortMethod.equals("UNSORTED")) {
+			return map;
+		}else if (sortMethod.equals("ASCENDING")){
 			Map<String, String> sortMap = new TreeMap<String, String>(new MapKeyComparator());
 			sortMap.putAll(map);
 			return sortMap;
@@ -36,7 +39,10 @@ public class CMapSort {
 		}
 		Map<String, String> sortedMap = new LinkedHashMap<String, String>();
 		List<Map.Entry<String, String>> entryList = new ArrayList<Map.Entry<String, String>>(map.entrySet());
-		if (sortMethod.equals("ASCENDING")){
+
+		if (sortMethod.equals("UNSORTED")) {
+			return map;
+		}else if (sortMethod.equals("ASCENDING")){
 			Collections.sort(entryList, new MapValueComparator());
 		}else if (sortMethod.equals("DESCENDING")) {
 			Collections.sort(entryList, new MapValueComparatorDesc());
@@ -50,69 +56,50 @@ public class CMapSort {
 		return sortedMap;
 	}
 
-	public static String combineMapEntry(Map<String, String> map, Boolean onlyKeyValue, Boolean onlyValue, String connector, String paraPrefixer, String paraSuffixer) {
+	public static String combineMapEntry(Map<String, String> map, CCombinationConfig combinationConfig){// Boolean onlyKeyValue, Boolean onlyValue, String connector, String paraPrefixer, String paraSuffixer) {
 		StringBuilder sb = new StringBuilder();
 		boolean isFirst = true;
 		for (Map.Entry<String, String> entry : map.entrySet()) {
 			if (!isFirst) {
-				sb.append(connector);
+				sb.append(combinationConfig.getParaConnector());
 			}
 			isFirst = false;
-			if (onlyValue) {
-				sb.append(entry.getValue());
-			} else if (onlyKeyValue) {
-				sb.append(entry.getKey()).append(entry.getValue());
-			} else {
-				sb.append(entry);
+			switch (combinationConfig.getCombinationType()){
+				case ONLY_VALUE:
+					sb.append(entry.getValue());
+					break;
+				case ONLY_KEY_VALUE:
+					sb.append(entry.getKey()).append(entry.getValue());
+					break;
+				case KEY_SYMBOL_VALUE:
+					sb.append(entry);
+					break;
+				default:
+					sb.append(entry);
 			}
 		}
-		if (paraPrefixer != null && !paraPrefixer.isEmpty()) {
-			sb.insert(0, paraPrefixer);
+		if (combinationConfig.getParaPrefixer() != null && !combinationConfig.getParaPrefixer().isEmpty()) {
+			sb.insert(0, combinationConfig.getParaPrefixer());
 		}
-		if (paraSuffixer != null && !paraSuffixer.isEmpty()) {
-			sb.append(paraSuffixer);
+		if (combinationConfig.getParaSuffixer() != null && !combinationConfig.getParaSuffixer().isEmpty()) {
+			sb.append(combinationConfig.getParaSuffixer());
 		}
 		return sb.toString();
 	}
-	public static String combineMapEntry2(Map<String, String> map, Boolean onlyKeyValue, Boolean onlyValue, String connector, String paraPrefixer, String paraSuffixer){
-		String result = "";
-		if (onlyValue) {
-			for (Map.Entry<String, String> entry : map.entrySet()){
-				if (!result.equals("")){
-					result += connector;
-				}
-				result += entry.getValue();
-			}
-		}else if(onlyKeyValue) {
-			for (Map.Entry<String, String> entry : map.entrySet()){
-				if (!result.equals("")){
-					result += connector;
-				}
-				result += entry.getKey();
-				result += entry.getValue();
-			}
-		}else {
-			for (Map.Entry<String, String> entry : map.entrySet()){
-				if (!result.equals("")){
-					result += connector;
-				}
-				result += entry;
-			}
-		}
-		if (paraPrefixer != null && !paraPrefixer.equals("")){
-			result = paraPrefixer + result;
-		}
-		if (paraSuffixer != null && !paraSuffixer.equals("")){
-			result += paraSuffixer;
-		}
-		return result;
-	}
+
 	public static void main (String[] args) {
-		Map<String, String> map = new TreeMap<String, String>();
+		Map<String, String> map = new LinkedHashMap<String, String>();
 		map.put("AKFC", "4kfc");
-		map.put("BWNBA", "3wnba");
-		map.put("CNBA", "2nba");
+		map.put("CWNBA", "3wnba");
+		map.put("BNBA", "2nba");
 		map.put("DCBA", "1cba");
+
+		System.out.println("key 自定义序列");
+		Map<String, String> resultMap4 = sortMapByKey(map,"UNSORTED");	//按Key进行降序排序
+		for (Map.Entry<String, String> entry : resultMap4.entrySet()) {
+			System.out.println(entry.getKey() + " " + entry.getValue());
+		}
+
 		Map<String, String> resultMap = sortMapByKey(map,"ASCENDING");	//按Key进行升序排序
 		System.out.println("key 升序");
 		for (Map.Entry<String, String> entry : resultMap.entrySet()) {
@@ -136,7 +123,10 @@ public class CMapSort {
 			//System.out.println(entry.getKey() + " " + entry.getValue());
 			System.out.println(entry);
 		}
-		System.out.println(combineMapEntry(resultMap1, false,false,"&", "", ""));
+
+		//System.out.println(combineMapEntry(resultMap4, false,false,"&", "", ""));
+
+
 	}
 }
 
@@ -146,8 +136,8 @@ public class CMapSort {
 			return str1.compareTo(str2);
 		}
 	}
-	
-	
+
+
 	class MapKeyComparatorDesc implements Comparator<String>{
 		public int compare(String str1, String str2) {
 			return -(str1.compareTo(str2)); //通过控制返回来逆序

@@ -1,4 +1,4 @@
-package custom;
+package custom.util;
 
 /**
  * 工具类

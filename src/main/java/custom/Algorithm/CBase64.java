@@ -1,4 +1,4 @@
-package custom;
+package custom.Algorithm;
 
 
 import java.io.UnsupportedEncodingException;
