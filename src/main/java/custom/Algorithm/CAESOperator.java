@@ -1,12 +1,10 @@
-package custom;
+package custom.Algorithm;
 
 import java.util.Scanner;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
-import custom.CBase64;
 
 /**AES 是一种可逆加密算法，对用户的敏感信息加密处理
 * 对原始数据进行AES加密后，在进行Base64编码转化；
