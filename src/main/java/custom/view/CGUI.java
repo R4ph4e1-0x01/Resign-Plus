@@ -1,5 +1,6 @@
 package custom.view;
 
+import burp.BurpExtender;
 import custom.Algorithm.CMD5;
 import custom.Algorithm.CSHA1;
 import custom.Algorithm.CSHA256;
@@ -157,7 +158,7 @@ public class CGUI extends JFrame {
 					}
 				} catch (Exception e2) {
 					// TODO: handle exception
-					BurpExtender.this.callbacks.printError(e2.getMessage());
+					//BurpExtender.this.callbacks.printError(e2.getMessage());
 				}
 
 			}
