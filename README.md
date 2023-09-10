@@ -10,11 +10,17 @@
 
 比原项目新增加更多好用的功能。如自动计算时间戳，增加更多灵活调整明文的手段。
 
+如果遇到bug请反馈issue。
+
 ## 使用方法
 
 右键->发送到插件：该功能主要是对于已知签名算法，需要配置自动重签名的情况，发送到插件界面进行签名算法配置。
 
 ![image-20220513153426044](ReadMe.assets/image-20220513153426044.png)
+
+现在您也可以在Header中使用<timestamp>标记，使用方式和url参数、body是一致的。
+
+![image-20230910220448126](README.assets/image-20230910220448126.png)
 
 在插件界面中，标记需要自动计算的参数，如果不需要用到timestamp可以不标记，但sign必须标记。
 
@@ -36,6 +42,19 @@
 
 ![image-20220511181829540](ReadMe.assets/image-20220511181829540.png)
 
+现在您也可以在Header中使用<timestamp>标记，使用方式和url参数、body是一致的。
+
+![8d80a0b8c14f53a8eec15e81a2847016](README.assets/8d80a0b8c14f53a8eec15e81a2847016.png)
+
 您可以使用替换功能，对时间戳的参数进行自动替换。或者当您使用sqlmap等工具时，将参数手动编辑为<timestamp>，再将流量代理到burpsuite中。
 
 ![image-20220511182753051](ReadMe.assets/image-20220511182753051.png)
+
+
+## 更新说明
+**V2.0**
+- 修复参数排序bug
+- 修复timestamp相关的bug
+- 对GUI操作的代码转移到CGUI类中
+- 添加custom.ICombinationConfig接口，力求解耦
+- 优化面板选项逻辑
