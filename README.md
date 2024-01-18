@@ -58,3 +58,6 @@
 - 对GUI操作的代码转移到CGUI类中
 - 添加custom.ICombinationConfig接口，力求解耦
 - 优化面板选项逻辑
+
+**V2.01**
+- 修复key没有正确处理的bug（想当然的认为通过字符串equals去比较作为条件，其实enum并不能直接当作string来用）

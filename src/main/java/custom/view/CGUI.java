@@ -80,7 +80,7 @@ public class CGUI extends JFrame {
 	private JCheckBox chckbx13timestamp;
 	private JCheckBox chckbxMD5u;
 
-	public String extenderName = "Resign Plus v2.0 by R4ph4e1";
+	public String extenderName = "Resign Plus v2.01 by R4ph4e1";
 //	public String secretKey = null;
 //	public int sortedColumn;
 //	public SortOrder sortedMethod;
@@ -765,7 +765,7 @@ public class CGUI extends JFrame {
 		// Create a string builder
 		StringBuilder sb = new StringBuilder();
 		// If the key is the same as the parameter
-		if ("SAME_AS_PARA".equals(combinationConfig.getKeyConfiguration())){
+		if (ICombinationConfig.KeyConfiguration.SAME_AS_PARA.equals(combinationConfig.getKeyConfiguration())){
 			// Get the text from the secret key
 			combinationConfig.setSecretKey(textFieldSecretKey.getText());
 			// If the secret key contains an equal sign and has two parts
@@ -801,7 +801,7 @@ public class CGUI extends JFrame {
 			sb.append(CMapSort.combineMapEntry(sortedMap, combinationConfig));//onlyKeyValue, onlyValue, paraConnector, paraPrefixer, paraSuffixer));
 		}
 		// If the key should be appended to the end
-		if ("APPEND_TO_END".equals(combinationConfig.getKeyConfiguration())) {
+		if (ICombinationConfig.KeyConfiguration.APPEND_TO_END.equals(combinationConfig.getKeyConfiguration())) {
 			// Get the text from the secret key
 			combinationConfig.setSecretKey(textFieldSecretKey.getText());
 			// Append the secret key
