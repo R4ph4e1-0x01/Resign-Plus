@@ -80,7 +80,7 @@ public class CGUI extends JFrame {
 	private JCheckBox chckbx13timestamp;
 	private JCheckBox chckbxMD5u;
 
-	public String extenderName = "Resign Plus v2.01 by R4ph4e1";
+	public String extenderName = "Resign Plus v2.02 by R4ph4e1";
 //	public String secretKey = null;
 //	public int sortedColumn;
 //	public SortOrder sortedMethod;

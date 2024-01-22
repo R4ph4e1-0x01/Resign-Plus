@@ -32,7 +32,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
     private PrintWriter stdout;//现在这里定义变量，再在registerExtenderCallbacks函数中实例化，如果都在函数中就只是局部变量，不能在这实例化，因为要用到其他参数。
 	private CGUI frame = new CGUI();
 
-	public String extenderName = "Resign Plus v2.01 by R4ph4e1";
+	public String extenderName = "Resign Plus v2.02 by R4ph4e1";
 
 
 
@@ -56,58 +56,63 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 
 	@Override
 	public void processHttpMessage(int toolFlag,boolean messageIsRequest,IHttpRequestResponse messageInfo) throws UnsupportedEncodingException {
-		if (toolFlag == (toolFlag & frame.checkEnabledFor())) {
-			if (messageIsRequest) {
-				String originRequest = new String(messageInfo.getRequest());
-				StringBuilder output = new StringBuilder();
-				IRequestInfo analyzedRequest = helpers.analyzeRequest(messageInfo);
-				byte getSignParaType = getParameterType(analyzedRequest, frame.signPara);
-				if (getHost(analyzedRequest).equals(frame.getHostFromUI()) && getSignParaType !=-1){
-					output.append("Origin Request:\n");
-					output.append(originRequest + "\n\n");
-					callbacks.printOutput(output.toString());
-					Map updatedParaMap = getUpdatedParaMapBaseOnTable(analyzedRequest);
-					CCombinationConfig combinationConfig = new CCombinationConfig();
-					String updatedParaStr = frame.combineString(updatedParaMap, combinationConfig);
-					updatedParaStr=CHttpReqRespUtil.processEscapedString(updatedParaStr);
+		try {
+			if (toolFlag == (toolFlag & frame.checkEnabledFor())) {
+				if (messageIsRequest) {
+					String originRequest = new String(messageInfo.getRequest());
+					StringBuilder output = new StringBuilder();
+					IRequestInfo analyzedRequest = helpers.analyzeRequest(messageInfo);
+					byte getSignParaType = getParameterType(analyzedRequest, frame.signPara);
+					if (getHost(analyzedRequest).equals(frame.getHostFromUI()) && getSignParaType !=-1){
+						output.append("Origin Request:\n");
+						output.append(originRequest + "\n\n");
+						callbacks.printOutput(output.toString());
+						Map updatedParaMap = getUpdatedParaMapBaseOnTable(analyzedRequest);
+						CCombinationConfig combinationConfig = new CCombinationConfig();
+						String updatedParaStr = frame.combineString(updatedParaMap, combinationConfig);
+						updatedParaStr=CHttpReqRespUtil.processEscapedString(updatedParaStr);
 
-					String timeStamp = "";
-					if (frame.timestampPara != null && frame.timestampPara.isEmpty()){
-						timeStamp = updatedParaMap.get(frame.timestampPara).toString();
-					}else {
-						timeStamp = Long.toString(System.currentTimeMillis() / 1000);
-						if (!frame.get10timestamp()) {
-							timeStamp = Long.toString(System.currentTimeMillis());
-						}
-					}
-
-					String newSign = frame.calculateNewSign(java.net.URLDecoder.decode(updatedParaStr,"UTF-8"));
-
-					byte[] newRequest;
-					if (getSignParaType == IHttpReqRespUtil.PARAM_HEADER) {// Sign in header, getSignParaType==10
-						LinkedHashMap<String, String> rawHeadersMap = CHttpReqRespUtil.getHeadersMap(analyzedRequest.getHeaders());
-						for (Map.Entry<String, String> rawHeaderEntry : rawHeadersMap.entrySet()) {
-							String rawHeaderName = rawHeaderEntry.getKey();
-							if (rawHeaderName.equals(frame.signPara)) {
-								rawHeadersMap.put(rawHeaderName, newSign);
+						String timeStamp = "";
+						if (frame.timestampPara != null && frame.timestampPara.isEmpty()){
+							timeStamp = updatedParaMap.get(frame.timestampPara).toString();
+						}else {
+							timeStamp = Long.toString(System.currentTimeMillis() / 1000);
+							if (!frame.get10timestamp()) {
+								timeStamp = Long.toString(System.currentTimeMillis());
 							}
 						}
-						// Process like ""GET / HTTP/1.1""
-						String headerFirstLine = analyzedRequest.getHeaders().get(0);
-						ArrayList<String> newHeaders = CHttpReqRespUtil.convertHeadersMapToList(rawHeadersMap);
-						newHeaders.add(0,headerFirstLine);
-						if (analyzedRequest.getContentType() == burp.IRequestInfo.CONTENT_TYPE_JSON) {
-							String updatedJsonBody = JSON.toJSONString(updatedParaMap);
-							updatedJsonBody = CHttpReqRespUtil.processEscapedString(CHttpReqRespUtil.processEscapedString(updatedJsonBody));
-							byte[] newRequestBody = updatedJsonBody.getBytes("UTF-8");
-							newRequest = helpers.buildHttpMessage(newHeaders, newRequestBody);
+
+//						String newSign = frame.calculateNewSign(java.net.URLDecoder.decode(updatedParaStr,"UTF-8"));
+						StringBuilder newSign  = new StringBuilder("");
+
+
+						byte[] newRequest;
+						if (getSignParaType == IHttpReqRespUtil.PARAM_HEADER) {// Sign in header, getSignParaType==10
+							LinkedHashMap<String, String> rawHeadersMap = CHttpReqRespUtil.getHeadersMap(analyzedRequest.getHeaders());
+							for (Map.Entry<String, String> rawHeaderEntry : rawHeadersMap.entrySet()) {
+								String rawHeaderName = rawHeaderEntry.getKey();
+								if (rawHeaderName.equals(frame.signPara)) {
+									newSign.append(frame.calculateNewSign(updatedParaStr));
+									rawHeadersMap.put(rawHeaderName, String.valueOf(newSign));
+								}
+							}
+							// Process like ""GET / HTTP/1.1""
+							String headerFirstLine = analyzedRequest.getHeaders().get(0);
+							ArrayList<String> newHeaders = CHttpReqRespUtil.convertHeadersMapToList(rawHeadersMap);
+							newHeaders.add(0,headerFirstLine);
+							if (analyzedRequest.getContentType() == burp.IRequestInfo.CONTENT_TYPE_JSON) {
+								String updatedJsonBody = JSON.toJSONString(updatedParaMap);
+								updatedJsonBody = CHttpReqRespUtil.processEscapedString(CHttpReqRespUtil.processEscapedString(updatedJsonBody));
+								byte[] newRequestBody = updatedJsonBody.getBytes("UTF-8");
+								newRequest = helpers.buildHttpMessage(newHeaders, newRequestBody);
 							} else {
-							String newRequestBodyString = originRequest.substring(analyzedRequest.getBodyOffset());
-							byte[] newRequestBody = newRequestBodyString.getBytes(StandardCharsets.ISO_8859_1);
-							newRequest = helpers.buildHttpMessage(newHeaders, newRequestBody);
+								String newRequestBodyString = originRequest.substring(analyzedRequest.getBodyOffset());
+								byte[] newRequestBody = newRequestBodyString.getBytes(StandardCharsets.ISO_8859_1);
+								newRequest = helpers.buildHttpMessage(newHeaders, newRequestBody);
 							}
 						} else { // Sign in parameter,
 							if (analyzedRequest.getContentType() == burp.IRequestInfo.CONTENT_TYPE_JSON) {
+								newSign.append(frame.calculateNewSign(updatedParaStr));
 								updatedParaMap.put(frame.signPara, newSign);
 								String updatedJsonBody = JSON.toJSONString(updatedParaMap);
 								updatedJsonBody = CHttpReqRespUtil.processEscapedString(CHttpReqRespUtil.processEscapedString(updatedJsonBody));
@@ -116,32 +121,36 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 								newRequest = helpers.buildHttpMessage(newHeaders, newRequestBody);
 								//messageInfo.setRequest(newRequest);
 							} else {
-								IParameter newSignPara = helpers.buildParameter(frame.signPara, newSign, getSignParaType);
+								newSign.append(frame.calculateNewSign(java.net.URLDecoder.decode(updatedParaStr,"UTF-8")));
+								IParameter newSignPara = helpers.buildParameter(frame.signPara, String.valueOf(newSign), getSignParaType);
 								//IParameter newTimeStamp = helpers.buildParameter(frame.timestampPara, )
 								newRequest = helpers.updateParameter(messageInfo.getRequest(), newSignPara);
 								//messageInfo.setRequest(newRequest);
 							}
 						}
 
-					//Sometimes timestamps are used multiple times
-					String newRequestProcessTimeStamp = new String(newRequest, StandardCharsets.UTF_8);
-					if (newRequestProcessTimeStamp.contains("<timestamp>")) {
-						newRequestProcessTimeStamp = newRequestProcessTimeStamp.replace("<timestamp>", timeStamp);
-					}
-					newRequest = newRequestProcessTimeStamp.getBytes(StandardCharsets.ISO_8859_1);
-					messageInfo.setRequest(newRequest);
+						//Sometimes timestamps are used multiple times
+						String newRequestProcessTimeStamp = new String(newRequest, StandardCharsets.UTF_8);
+						if (newRequestProcessTimeStamp.contains("<timestamp>")) {
+							newRequestProcessTimeStamp = newRequestProcessTimeStamp.replace("<timestamp>", timeStamp);
+						}
+						newRequest = newRequestProcessTimeStamp.getBytes(StandardCharsets.ISO_8859_1);
+						messageInfo.setRequest(newRequest);
 
-					output.setLength(0); //reset the output
-					output.append("==allParams====allParams==\n" + updatedParaStr + "\n");
-					output.append("==Sign====Sign==\n" + newSign + "\n");
-					output.append("Changed Request:\n");
-					output.append(new String(messageInfo.getRequest()) + "\n\n");
-					callbacks.printOutput(output.toString());
+						output.setLength(0); //reset the output
+						output.append("==allParams====allParams==\n" + updatedParaStr + "\n");
+						output.append("==Sign====Sign==\n" + newSign + "\n");
+						output.append("Changed Request:\n");
+						output.append(new String(messageInfo.getRequest()) + "\n\n");
+						callbacks.printOutput(output.toString());
+					}
 				}
 			}
+		} catch (Exception e) {
+			callbacks.printOutput(e.toString());
 		}
-	}
 
+	}
 
 
 
@@ -304,9 +313,16 @@ public class BurpExtender implements IBurpExtender, IHttpListener, ITab, IContex
 	            	Map<String,String> paraMap = CHttpReqRespUtil.getParaMap(analyzeRequest);
 	            	//stdout.println(paraMap);
 	            	//stdout.print(paraMap.keySet());
-	            	for(String key:paraMap.keySet()){
-	            		tableModel.addRow(new Object[]{URLDecoder.decode(key),URLDecoder.decode(paraMap.get(key))});
-	            	}
+					if (analyzeRequest.getContentType() == burp.IRequestInfo.CONTENT_TYPE_JSON) {
+						for(String key:paraMap.keySet()){
+							tableModel.addRow(new Object[]{(key),(paraMap.get(key))});
+						}
+					} else {
+						for(String key:paraMap.keySet()){
+							tableModel.addRow(new Object[]{URLDecoder.decode(key),URLDecoder.decode(paraMap.get(key))});
+						}
+					}
+
 	            }
 	            catch (Exception e1)
 	            {
